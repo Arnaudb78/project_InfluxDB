@@ -3,19 +3,26 @@ from influxdb_client_3 import InfluxDBClient3, Point
 import datetime
 import os
 
-host = "eu.central-1-1.aws.cloud2.influxdata.com"
-org = "6a841c0c08328fb1"
+load_dotenv()
+
+host = os.getenv("INFLUXDB_HOST")
+org = os.getenv("INFLUXDB_ORG")
 token = os.getenv("INFLUXDB_TOKEN")
 database = "database"
 
 client = InfluxDBClient3(
     token=token,
-    host=host,
+    host=f"https://{host}",
     org=org)
 
-data = Point().tag().field().field().time()
-client.write(data)
+point = Point("measurement_name").tag("tag_key", "tag_value").field(
+    "field_key", "field_value").time(datetime.datetime.utcnow())
 
-sql = '''SELECT * FROM table'''
-table = client.query(query=sql, language='sql', mode='all')
-print(table)
+write_api = client._write_api
+write_api.write(bucket=database, record=point)
+
+query = 'from(bucket:"database") |> range(start: -1h)'
+tables = client.query_api().query(query, org=org)
+for table in tables:
+    for row in table.records:
+        print(row.values)
