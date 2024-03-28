@@ -1,28 +1,82 @@
-from dotenv import load_dotenv
-from influxdb_client_3 import InfluxDBClient3, Point
-import datetime
 import os
+import time
+from influxdb_client_3 import InfluxDBClient3, Point
+from dotenv import load_dotenv
 
 load_dotenv()
 
-host = os.getenv("INFLUXDB_HOST")
-org = os.getenv("INFLUXDB_ORG")
-token = os.getenv("INFLUXDB_TOKEN")
-database = "database"
 
-client = InfluxDBClient3(
-    token=token,
-    host=f"https://{host}",
-    org=org)
+token = os.environ.get("INFLUXDB_TOKEN")
+org = "ALP Digital Web"
+host = "https://us-east-1-1.aws.cloud2.influxdata.com"
 
-point = Point("measurement_name").tag("tag_key", "tag_value").field(
-    "field_key", "field_value").time(datetime.datetime.utcnow())
+client = InfluxDBClient3(host=host, token=token, org=org)
 
-write_api = client._write_api
-write_api.write(bucket=database, record=point)
+database = "Database"
 
-query = 'from(bucket:"database") |> range(start: -1h)'
-tables = client.query_api().query(query, org=org)
-for table in tables:
-    for row in table.records:
-        print(row.values)
+data = {
+  "point1": {
+    "location": "Klamath",
+    "species": "bees",
+    "count": 23,
+  },
+  "point2": {
+    "location": "Portland",
+    "species": "ants",
+    "count": 30,
+  },
+  "point3": {
+    "location": "Klamath",
+    "species": "bees",
+    "count": 28,
+  },
+  "point4": {
+    "location": "Portland",
+    "species": "ants",
+    "count": 32,
+  },
+  "point5": {
+    "location": "Klamath",
+    "species": "bees",
+    "count": 29,
+  },
+  "point6": {
+    "location": "Portland",
+    "species": "ants",
+    "count": 40,
+  },
+}
+
+for key in data:
+  point = (
+    Point("census")
+    .tag("location", data[key]["location"])
+    .field(data[key]["species"], data[key]["count"]))
+  client.write(database=database, record=point).time.sleep(1)
+
+print("Complete. Return to the InfluxDB UI.")
+
+query = """SELECT *
+FROM 'census'
+WHERE time >= now() - interval '24 hours'
+AND ('bees' IS NOT NULL OR 'ants' IS NOT NULL)"""
+
+# Execute the query
+table = client.query(query=query, database="Database", language='sql') )
+
+# Convert to dataframe
+df = table.to_pandas().sort_values(by="time")
+print(df)
+
+
+query = """SELECT mean(count)
+FROM "census"
+WHERE time > now() - 10m"""
+
+# Execute the query
+table = client.query(query=query, database="Database", language="influxql")
+
+# Convert to dataframe
+df = table.to_pandas().sort_values(by="time")
+print(df)
+
